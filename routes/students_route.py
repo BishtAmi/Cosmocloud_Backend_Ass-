@@ -1,13 +1,17 @@
 from fastapi import APIRouter
+from fastapi import FastAPI, Depends, Request
 from models.student_model import Student
 from schemas.student_schema import  students_serializer
 from bson import ObjectId
 from config.db import collection
 from typing import Optional
 from fastapi import Query
-from fastapi import HTTPException
-
+from fastapi import HTTPException , Header
+from middleware.ratelimiter import RateLimitMiddleware,rate_provider,identifier
 student = APIRouter()
+from fastapi import Depends, FastAPI
+
+app = FastAPI()
 
 
 # post request  /student -> create students
@@ -38,10 +42,8 @@ async def get_all_students(country: Optional[str] = Query(None, description="To 
     data = [{"name": student["name"], "age": student["age"]} for student in students]
     return {"data": data }
 
-
-# get request /student/{id} get student by there id
-
-@student.get("/students/{id}",status_code=200)
+# get request /student/{id} get student by there id && added rate limiter
+@student.get("/students/{id}",status_code=200,dependencies=[Depends(RateLimitMiddleware(rate_provider=rate_provider,identifier=identifier))])
 async def get_student_by_id(id: str):
     existing_student = collection.find_one({"_id": ObjectId(id)})
     if existing_student is None:
@@ -50,9 +52,8 @@ async def get_student_by_id(id: str):
     return {"status": "Ok", "data": student}
     
 
-# patch request /student/{id} update student by there id
-
-@student.patch("/students/{id}",status_code=204)
+# patch request /student/{id} update student by there id && added rate limiter
+@student.patch("/students/{id}",status_code=204,dependencies=[Depends(RateLimitMiddleware(rate_provider=rate_provider,identifier=identifier))])
 async def update_student_by_id(id: str, student_data: dict):
     # Fetch the existing student from the database
     existing_student = collection.find_one({"_id": ObjectId(id)})
@@ -68,12 +69,13 @@ async def update_student_by_id(id: str, student_data: dict):
     collection.update_one({"_id": ObjectId(id)}, {"$set": existing_student})
     
 
-# delete request /student/{id} delete student with given id
+# delete request /student/{id} delete student with given id && added rate limiter
 
-@student.delete("/students/{id}",status_code=200)
+@student.delete("/students/{id}",status_code=200,dependencies=[Depends(RateLimitMiddleware(rate_provider=rate_provider,identifier=identifier))])
 async def delete_student_by_id(id: str):
     existing_student = collection.find_one({"_id": ObjectId(id)})
     if existing_student is None:
         raise HTTPException(status_code=404, detail="Student not found")
     collection.delete_one({"_id": ObjectId(id)})
     return { "data": "record delete"}
+
